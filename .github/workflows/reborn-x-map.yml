@@ -1,0 +1,20 @@
+name: REBORN X map import
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'reborn-x/tools/import_map.py'
+      - '.github/workflows/reborn-x-map.yml'
+permissions:
+  contents: read
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 reborn-x/tools/import_map.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardanger-map
+          path: reborn-x/data/hardanger.json
