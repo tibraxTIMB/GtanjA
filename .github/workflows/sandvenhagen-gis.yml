@@ -1,0 +1,25 @@
+name: Sandvenhagen GIS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/sandvenhagen-gis.yml'
+      - 'reborn-x/tools/import_sandvenhagen.py'
+permissions:
+  contents: read
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python reborn-x/tools/import_sandvenhagen.py
+      - run: python -m json.tool reborn-x/data/sandvenhagen.geojson > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sandvenhagen-gis
+          path: reborn-x/data/sandvenhagen.geojson
+          if-no-files-found: error
