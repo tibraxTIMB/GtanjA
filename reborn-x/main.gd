@@ -13,6 +13,11 @@ var speed_label: Label
 var camera_mode := 0
 var camera_distance := 12.0
 var mission_stage := 0
+var hitch: PinJoint3D
+var cargo_mass := 0.0
+var career_xp := 0
+var career_jobs := 0
+var cargo_visual: MeshInstance3D
 var mission_label: Label
 var destination := Vector3(80,0,100)
 var map_label: Label
@@ -156,6 +161,7 @@ func _ready() -> void:
 	nameplate.position = Vector3(0,0.45,-1.46)
 	nameplate.rotation_degrees.y = 180
 	var joint := PinJoint3D.new()
+	hitch = joint
 	add_child(joint)
 	joint.position = car.position + Vector3(0,0,-2.2)
 	joint.node_a = joint.get_path_to(car)
@@ -170,6 +176,10 @@ func _ready() -> void:
 		block(self,Vector3(80,0.05,100),Vector3(12,0.1,12),Color(0.8,0.65,0.15))
 		for i in range(3):
 			block(self,Vector3(90+i*5,1.2,110),Vector3(4,2.4,3),Color(0.2,0.45,0.35),true)
+	var saved := ConfigFile.new()
+	if saved.load("user://reborn_x_career.cfg") == OK:
+		career_xp = int(saved.get_value("career","xp",0))
+		career_jobs = int(saved.get_value("career","jobs",0))
 	var hud := CanvasLayer.new()
 	add_child(hud)
 	speed_label = Label.new()
@@ -187,7 +197,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -226,6 +236,33 @@ func control(label: String, pressed: bool) -> void:
 		"HØGRE": steering = 1.0 if pressed else 0.0
 		"GASS": throttle = pressed
 		"BREMS": braking = pressed
+		"KOPLING":
+			if pressed and car.linear_velocity.length()<0.2 and trailer.linear_velocity.length()<0.2:
+				if hitch.node_b != NodePath(""):
+					hitch.node_b = NodePath("")
+				else:
+					var ball := car.to_global(Vector3(0,0,-2.2))
+					var socket := trailer.to_global(Vector3(0,0,2.6))
+					if ball.distance_to(socket)<0.35:
+						hitch.global_position = ball
+						hitch.node_a = hitch.get_path_to(car)
+						hitch.node_b = hitch.get_path_to(trailer)
+		"LAST":
+			if pressed and trailer.linear_velocity.length()<0.2:
+				cargo_mass = 150.0 if cargo_mass == 0 else 0.0
+				trailer.mass = 230.0+cargo_mass
+				trailer.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+				trailer.center_of_mass = Vector3(0,0.2 if cargo_mass>0 else 0,0.15 if cargo_mass>0 else 0)
+				if is_instance_valid(cargo_visual):
+					cargo_visual.queue_free()
+				if cargo_mass>0:
+					cargo_visual = MeshInstance3D.new()
+					var crate := BoxMesh.new()
+					crate.size = Vector3(1.2,0.5,1.5)
+					cargo_visual.mesh = crate
+					cargo_visual.material_override = material(Color(0.45,0.3,0.16))
+					trailer.add_child(cargo_visual)
+					cargo_visual.position = Vector3(0,0.4,0.2)
 		"ZOOM":
 			if pressed:
 				camera_distance = 18.0 if camera_distance < 15.0 else 9.0
@@ -244,8 +281,15 @@ func _physics_process(delta: float) -> void:
 	var bearing := wrapf(atan2(relative.x,relative.z)-car.rotation.y,-PI,PI)
 	map_label.text = "GPS: %d m | %s" % [roundi(distance), "høgre" if bearing>0.25 else ("venstre" if bearing < -0.25 else "rett fram")]
 	if mission_stage == 0 and distance < 8 and car.linear_velocity.length()<1:
-		mission_stage = 1
-	mission_label.text = "Oppdrag: køyr til testområdet og stopp" if mission_stage == 0 else "Oppdrag fullført"
+		if hitch.node_b != NodePath("") and cargo_mass>0:
+			mission_stage = 1
+			career_xp += 100
+			career_jobs += 1
+			var saved := ConfigFile.new()
+			saved.set_value("career","xp",career_xp)
+			saved.set_value("career","jobs",career_jobs)
+			saved.save("user://reborn_x_career.cfg")
+	mission_label.text = ("Last Tanja og lever ved GPS-målet" if mission_stage == 0 else "Oppdrag fullført") + " | %d XP | %d kg | %s" % [career_xp,roundi(cargo_mass),"Kopla" if hitch.node_b != NodePath("") else "Fråkopla"]
 	var steer_input := wheel_angle/PI + steering + Input.get_axis("ui_left","ui_right")
 	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45*(1.0-0.5*clampf(car.linear_velocity.length()/20.0,0.0,1.0)), minf(delta*7,1))
 	car.engine_force = (-650.0 if reverse else 650.0) if throttle or Input.is_action_pressed("ui_up") else 0.0
