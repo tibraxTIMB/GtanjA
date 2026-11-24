@@ -1,0 +1,40 @@
+name: Hardanger fast preview
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hardanger-preview-fast.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardanger-vector-map
+          run-id: 45501791253
+          github-token: ${{ github.token }}
+          path: reborn-x/data
+      - name: Test Godot with actual map
+        run: |
+          set -o pipefail
+          test -s reborn-x/data/hardanger.json
+          curl -fL --retry 2 https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o godot.zip
+          unzip -q godot.zip
+          ./Godot_v4.4.1-stable_linux.x86_64 --headless --path reborn-x --editor --import 2>&1 | tee import.log
+          ! grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log
+          ./Godot_v4.4.1-stable_linux.x86_64 --headless --path reborn-x --quit-after 300 2>&1 | tee runtime.log
+          ! grep -E 'SCRIPT ERROR|Parse Error|ERROR:' runtime.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hardanger-fast-preview
+          path: reborn-x/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fast-preview-logs
+          path: '*.log'
