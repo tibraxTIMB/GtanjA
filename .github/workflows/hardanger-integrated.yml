@@ -1,0 +1,49 @@
+name: Hardanger integrated GIS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hardanger-integrated.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pyproj rasterio numpy
+      - run: python reborn-x/tools/import_map.py
+      - run: python reborn-x/tools/import_sandvenhagen.py
+      - run: python reborn-x/tools/project_sandvenhagen.py
+      - run: sudo apt-get update && sudo apt-get install -y gdal-bin
+      - name: Terrain acquisition
+        run: |
+          python - <<'PY'
+          from pyproj import Transformer
+          import subprocess,re
+          e,n=Transformer.from_crs(4326,25832,always_xy=True).transform(6.18,60.3775)
+          url="WCS:https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+          info=subprocess.check_output(["gdalinfo",url],text=True)
+          layers=re.findall(r"SUBDATASET_\d+_NAME=(.*)",info)
+          if len(layers)!=1: raise RuntimeError("Ambiguous WCS coverage")
+          r=3510
+          subprocess.run(["gdal_translate","-projwin",str(e-r),str(n+r),str(e+r),str(n-r),"-tr","10","10",layers[0].strip(),"terrain.tif"],check=True)
+          PY
+      - run: python reborn-x/tools/import_terrain.py terrain.tif --license "Pending dataset license verification; test only" --source-url "https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+      - run: python reborn-x/tools/validate_geography.py
+      - run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip -q Godot_v4.4.1-stable_linux.x86_64.zip
+          ./Godot_v4.4.1-stable_linux.x86_64 --headless --path reborn-x --editor --import
+          set -o pipefail
+          ./Godot_v4.4.1-stable_linux.x86_64 --headless --path reborn-x --quit-after 300 2>&1 | tee runtime.log
+          ! grep -E 'SCRIPT ERROR|ERROR:' runtime.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gis-test-log
+          path: runtime.log
