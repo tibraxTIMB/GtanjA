@@ -1,0 +1,36 @@
+name: REBORN X validation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'reborn-x/**'
+      - '.github/workflows/reborn-x-check.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.4.1
+        run: |
+          curl --fail --location --retry 3 -o godot.zip https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip godot.zip
+          chmod +x Godot_v4.4.1-stable_linux.x86_64
+          sudo mv Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+      - name: Import and validate scripts
+        run: |
+          set -o pipefail
+          godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
+      - name: Run scene smoke test
+        run: |
+          set -o pipefail
+          godot --headless --path reborn-x --quit-after 300 2>&1 | tee runtime.log
+          if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' runtime.log; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reborn-x-validation-logs
+          path: '*.log'
