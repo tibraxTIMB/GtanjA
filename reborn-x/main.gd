@@ -22,6 +22,10 @@ var cargo = preload("res://cargo_engineering.gd").new()
 var cargo_meshes: Array[MeshInstance3D] = []
 var cargo_selected := -1
 var cargo_kind := 0
+var sorted_count := 0
+var sorting_errors := 0
+var sorting_feedback := ""
+const SORT_NAMES = ["Hageavfall","Jord","Stein","Møblar"]
 const TEST_PAYLOAD_LIMIT := 520.0
 var cargo_straps: Array[MeshInstance3D] = []
 const CARGO_TYPES = [
@@ -233,7 +237,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE","LASTTYPE","LOSS"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE","LASTTYPE","LOSS","SORTER"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -319,6 +323,24 @@ func control(label: String, pressed: bool) -> void:
 					cargo.items.clear()
 					cargo_selected = -1
 				refresh_cargo()
+		"SORTER":
+			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2 and cargo_selected>=0 and cargo_selected<cargo.items.size():
+				if trailer.global_position.distance_to(destination)>20:
+					sorting_feedback = "Køyr til leveringsområdet først"
+				elif cargo.items[cargo_selected]["secured"]:
+					sorting_feedback = "Frigjer spennbandet først"
+				elif int(cargo.items[cargo_selected].get("kind",0)) != cargo_kind:
+					sorting_errors += 1
+					sorting_feedback = "BIR-Berit: Feil sortering!"
+				else:
+					sorted_count += 1
+					career_xp += 25
+					sorting_feedback = "Godkjend sortering: "+SORT_NAMES[cargo_kind]
+					control("LOSS",true)
+					var saved := ConfigFile.new()
+					saved.set_value("career","xp",career_xp)
+					saved.set_value("career","jobs",career_jobs)
+					saved.save("user://reborn_x_career.cfg")
 		"LOSS":
 			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2 and cargo_selected>=0 and cargo_selected<cargo.items.size():
 				if not cargo.items[cargo_selected]["secured"]:
@@ -373,6 +395,7 @@ func _physics_process(delta: float) -> void:
 			saved.save("user://reborn_x_career.cfg")
 	mission_label.text = ("Last Tanja og lever ved GPS-målet" if mission_stage == 0 else "Oppdrag fullført") + " | %d XP | %d kg | %s" % [career_xp,roundi(cargo_mass),"Kopla" if hitch.node_b != NodePath("") else "Fråkopla"]
 	mission_label.text += "\nLasttype: %s | Kuletrykkbidrag: %.1f kg" % [CARGO_TYPES[cargo_kind]["name"],cargo.hitch_load_kg()]
+	mission_label.text += "\nSortering: %s | Rett: %d | Feil: %d | %s" % [SORT_NAMES[cargo_kind],sorted_count,sorting_errors,sorting_feedback]
 	if cargo_mass > TEST_PAYLOAD_LIMIT:
 		mission_label.text += " | OVERLAST (testgrense)"
 	elif cargo.hitch_load_kg() < 0:
