@@ -18,6 +18,9 @@ var camera_distance := 12.0
 var mission_stage := 0
 var hitch: PinJoint3D
 var cargo_mass := 0.0
+var tailgate: Node3D
+var tailgate_open := false
+var tailgate_locked := true
 var career_xp := 0
 var career_jobs := 0
 var cargo_visual: MeshInstance3D
@@ -141,7 +144,12 @@ func _ready() -> void:
 		axle.rotation_degrees.y = 90
 		axle.node_a = axle.get_path_to(trailer)
 		axle.node_b = axle.get_path_to(tire_body)
-	block(trailer, Vector3(0,0.4,-1.4), Vector3(1.65,0.65,0.08), Color.SILVER)
+	tailgate = Node3D.new()
+	trailer.add_child(tailgate)
+	tailgate.position = Vector3(0,0.075,-1.4)
+	block(tailgate,Vector3(0,0.325,0),Vector3(1.65,0.65,0.08),Color.SILVER)
+	for x in [-0.72,0.72]:
+		block(tailgate,Vector3(x,0.56,-0.06),Vector3(0.08,0.15,0.06),Color(0.25,0.27,0.29))
 	block(trailer, Vector3(0,0.4,1.4), Vector3(1.65,0.65,0.08), Color.SILVER)
 	for x in [-0.8,0.8]:
 		block(trailer, Vector3(x,0.77,0), Vector3(0.12,0.08,2.8), Color(0.78,0.8,0.82))
@@ -202,7 +210,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","LÅS LUKE","BAKLUKE"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -252,8 +260,14 @@ func control(label: String, pressed: bool) -> void:
 						hitch.global_position = ball
 						hitch.node_a = hitch.get_path_to(car)
 						hitch.node_b = hitch.get_path_to(trailer)
+		"LÅS LUKE":
+			if pressed and not tailgate_open and trailer.linear_velocity.length()<0.2:
+				tailgate_locked = not tailgate_locked
+		"BAKLUKE":
+			if pressed and not tailgate_locked and trailer.linear_velocity.length()<0.2:
+				tailgate_open = not tailgate_open
 		"LAST":
-			if pressed and trailer.linear_velocity.length()<0.2:
+			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2:
 				cargo_mass = 150.0 if cargo_mass == 0 else 0.0
 				trailer.mass = 230.0+cargo_mass
 				trailer.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
@@ -279,6 +293,8 @@ func control(label: String, pressed: bool) -> void:
 				reverse = not reverse
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(tailgate):
+		tailgate.rotation.x = move_toward(tailgate.rotation.x,-PI/2 if tailgate_open else 0.0,delta*2.5)
 	update_traffic(delta)
 	if is_instance_valid(motor_audio):
 		motor_audio.pitch_scale = 0.8 + clampf(car.linear_velocity.length()/18.0,0.0,1.0)*1.4
@@ -290,7 +306,7 @@ func _physics_process(delta: float) -> void:
 	var bearing := wrapf(atan2(relative.x,relative.z)-car.rotation.y,-PI,PI)
 	map_label.text = "GPS: %d m | %s" % [roundi(distance), "høgre" if bearing>0.25 else ("venstre" if bearing < -0.25 else "rett fram")]
 	if mission_stage == 0 and distance < 8 and car.linear_velocity.length()<1:
-		if hitch.node_b != NodePath("") and cargo_mass>0:
+		if hitch.node_b != NodePath("") and cargo_mass>0 and tailgate_locked and not tailgate_open:
 			mission_stage = 1
 			career_xp += 100
 			career_jobs += 1
