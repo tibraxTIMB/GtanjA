@@ -2,6 +2,7 @@ extends Node3D
 
 var map_spawn := Vector3(0,0.85,-40)
 var map_loaded := false
+var map_heading := 0.0
 var terrain = null
 
 func ground_height(x:float,z:float) -> float:
@@ -116,6 +117,7 @@ func _ready() -> void:
 	car.mass = 1450
 	add_child(car)
 	car.position = map_spawn
+	car.rotation.y = map_heading
 	add_shape(car, Vector3(1.8,0.65,4.2), Vector3.ZERO)
 	block(car, Vector3.ZERO, Vector3(1.8,0.65,4.2), Color(0.65,0.12,0.08))
 	block(car, Vector3(0,0.6,0), Vector3(1.6,0.65,2.1), Color(0.2,0.35,0.45))
@@ -144,7 +146,8 @@ func _ready() -> void:
 	trailer = RigidBody3D.new()
 	trailer.mass = 230
 	add_child(trailer)
-	trailer.position = car.position + Vector3(0,0,-4.8)
+	trailer.position = car.position + car.basis * Vector3(0,0,-4.8)
+	trailer.rotation.y = map_heading
 	add_shape(trailer, Vector3(1.65,0.25,2.8), Vector3.ZERO)
 	block(trailer, Vector3.ZERO, Vector3(1.65,0.25,2.8), Color.SILVER)
 	for x in [-0.8,0.8]:
@@ -153,7 +156,8 @@ func _ready() -> void:
 		var tire_body := RigidBody3D.new()
 		tire_body.mass = 12
 		add_child(tire_body)
-		tire_body.position = trailer.position + Vector3(x,-0.35,0)
+		tire_body.position = trailer.position + trailer.basis * Vector3(x,-0.35,0)
+		tire_body.rotation.y = map_heading
 		var tire_shape := CylinderShape3D.new()
 		tire_shape.radius = 0.34
 		tire_shape.height = 0.22
@@ -173,7 +177,7 @@ func _ready() -> void:
 		var axle := HingeJoint3D.new()
 		add_child(axle)
 		axle.position = tire_body.position
-		axle.rotation_degrees.y = 90
+		axle.rotation.y = map_heading + PI/2
 		axle.node_a = axle.get_path_to(trailer)
 		axle.node_b = axle.get_path_to(tire_body)
 	tailgate = Node3D.new()
@@ -459,6 +463,7 @@ func load_geography() -> bool:
 			transforms.append(Transform3D(basis,(p+q)/2))
 			if not map_loaded and d.length()>15 and width>=7:
 				map_spawn = (p+q)/2 + Vector3(0,0.85,0)
+				map_heading = atan2(d.x,d.z)
 				map_loaded = true
 	if transforms.is_empty():
 		return false
@@ -491,8 +496,9 @@ func load_geography() -> bool:
 		var shape := CSGPolygon3D.new()
 		shape.polygon = local
 		shape.depth = 5
+		shape.use_collision = true
 		shape.rotation_degrees.x = 90
-		shape.position = Vector3(center.x,ground_height(center.x,center.y)+5,center.y)
+		shape.position = Vector3(center.x,ground_height(center.x,center.y),center.y)
 		shape.material = material(Color(0.7,0.63,0.52))
 		add_child(shape)
 	map_loaded = true
