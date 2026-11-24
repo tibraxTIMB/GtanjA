@@ -48,8 +48,12 @@ jobs:
           set -o pipefail
           godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
           if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
-          godot --headless --path reborn-x --export-debug Android "$PWD/build/gtanja-debug.apk" 2>&1 | tee export.log
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
+          export GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey
+          export GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android
+          godot --headless --verbose --path reborn-x --export-debug Android "$PWD/build/gtanja-debug.apk" 2>&1 | tee export.log
           test -s build/gtanja-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify build/gtanja-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: GTanjA-Hardanger-Drive
