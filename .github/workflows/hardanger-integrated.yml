@@ -57,6 +57,33 @@ jobs:
           PY
       - run: python reborn-x/tools/import_terrain.py terrain.tif --license "Pending dataset license verification; test only" --source-url "https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
       - run: python reborn-x/tools/validate_geography.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardanger-terrain
+          path: |
+            reborn-x/data/terrain.json
+            reborn-x/data/terrain.f32
+  preview:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: always()
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardanger-vector-map
+          path: reborn-x/data
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: hardanger-terrain
+          path: reborn-x/data
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: sandvenhagen-detail
+          path: reborn-x/data
       - run: |
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
           unzip -q Godot_v4.4.1-stable_linux.x86_64.zip
@@ -64,6 +91,11 @@ jobs:
           set -o pipefail
           ./Godot_v4.4.1-stable_linux.x86_64 --headless --path reborn-x --quit-after 300 2>&1 | tee runtime.log
           ! grep -E 'SCRIPT ERROR|ERROR:' runtime.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardanger-preview-project
+          path: reborn-x/
+          include-hidden-files: false
       - uses: actions/upload-artifact@v4
         if: always()
         with:
