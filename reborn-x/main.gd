@@ -214,15 +214,20 @@ func _ready() -> void:
 	var joint := PinJoint3D.new()
 	hitch = joint
 	add_child(joint)
-	joint.position = car.position + Vector3(0,0,-2.2)
+	joint.position = car.position + car.basis * Vector3(0,0,-2.2)
 	joint.node_a = joint.get_path_to(car)
 	joint.node_b = joint.get_path_to(trailer)
 	camera = Camera3D.new()
 	add_child(camera)
 	camera.current = true
-	camera.position = car.position + Vector3(0,6,-12)
+	camera.position = car.position + car.basis * Vector3(0,6,-12)
 	if map_loaded:
-		destination = map_spawn + Vector3(0,0,25)
+		destination = map_spawn + car.basis * Vector3(0,0,25)
+		var site = JSON.parse_string(FileAccess.get_file_as_string("res://data/sandvenhagen-local.json")) if FileAccess.file_exists("res://data/sandvenhagen-local.json") else null
+		if site is Dictionary and site.get("crs", "") == "EPSG:25832":
+			var point = site.get("address_point", [])
+			if point is Array and point.size() == 2:
+				destination = Vector3(float(point[0]),0,float(point[1]))
 		destination.y = ground_height(destination.x,destination.z)
 	else:
 		block(self,Vector3(80,0.05,100),Vector3(12,0.1,12),Color(0.8,0.65,0.15))
@@ -638,6 +643,7 @@ func setup_sorting_bays() -> void:
 	# Fictional test layout; not a surveyed BIR facility.
 	for i in range(4):
 		var pos := destination + Vector3((i-1.5)*6.0,0,10)
+		pos.y = ground_height(pos.x,pos.z)
 		pos.y = ground_height(pos.x,pos.z)
 		sorting_bays.append(pos-Vector3(0,0,4))
 		var color := Color(0.22,0.42,0.32)
