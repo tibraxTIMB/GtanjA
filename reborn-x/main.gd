@@ -1,5 +1,7 @@
 extends Node3D
 
+var map_spawn := Vector3(0,0.85,-40)
+var map_loaded := false
 var car: VehicleBody3D
 var trailer: RigidBody3D
 var camera: Camera3D
@@ -54,17 +56,18 @@ func _ready() -> void:
 	env.environment.ambient_light_color = Color.WHITE
 	env.environment.ambient_light_energy = 0.65
 	add_child(env)
-	block(self, Vector3(0,-0.5,0), Vector3(500,1,500), Color(0.28,0.43,0.23), true)
-	for x in [-80,0,80]:
-		block(self, Vector3(x,0.01,0), Vector3(8,0.03,220), Color(0.22,0.24,0.25))
-	for z in [-100,0,100]:
-		block(self, Vector3(0,0.02,z), Vector3(180,0.03,8), Color(0.22,0.24,0.25))
-	for i in range(12):
-		block(self, Vector3(-65 + (i % 6)*25,2.5,-55 if i<6 else 55), Vector3(9,5,8), Color(0.7,0.63,0.52), true)
+	if not load_geography():
+		block(self, Vector3(0,-0.5,0), Vector3(500,1,500), Color(0.28,0.43,0.23), true)
+		for x in [-80,0,80]:
+			block(self, Vector3(x,0.01,0), Vector3(8,0.03,220), Color(0.22,0.24,0.25))
+		for z in [-100,0,100]:
+			block(self, Vector3(0,0.02,z), Vector3(180,0.03,8), Color(0.22,0.24,0.25))
+		for i in range(12):
+			block(self, Vector3(-65 + (i % 6)*25,2.5,-55 if i<6 else 55), Vector3(9,5,8), Color(0.7,0.63,0.52), true)
 	car = VehicleBody3D.new()
 	car.mass = 1450
 	add_child(car)
-	car.position = Vector3(0,0.85,-40)
+	car.position = map_spawn
 	add_shape(car, Vector3(1.8,0.65,4.2), Vector3.ZERO)
 	block(car, Vector3.ZERO, Vector3(1.8,0.65,4.2), Color(0.65,0.12,0.08))
 	block(car, Vector3(0,0.6,0), Vector3(1.6,0.65,2.1), Color(0.2,0.35,0.45))
@@ -199,4 +202,68 @@ func _physics_process(delta: float) -> void:
 		target = trailer.global_position + trailer.global_basis * Vector3(0,4,-8)
 	camera.position = camera.position.lerp(target,minf(delta*5,1))
 	camera.look_at(car.global_position + Vector3.UP)
-	speed_label.text = "REBORN X | %d km/t | %s" % [roundi(car.linear_velocity.length()*3.6),"R" if reverse else "D"]
+	speed_label.text = "REBORN X | %d km/t | %s | %s" % [roundi(car.linear_velocity.length()*3.6),"R" if reverse else "D","OSM" if map_loaded else "TESTKART"]
+
+func load_geography() -> bool:
+	var path := "res://data/hardanger.json"
+	if not FileAccess.file_exists(path):
+		return false
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not data is Dictionary or not data.has("roads") or data["roads"].is_empty():
+		return false
+	block(self, Vector3(0,-0.5,0), Vector3(6600,1,6600), Color(0.28,0.43,0.23), true)
+	var asphalt := material(Color(0.22,0.24,0.25))
+	var road_mesh := BoxMesh.new()
+	road_mesh.size = Vector3(1,0.04,1)
+	var transforms: Array[Transform3D] = []
+	for road in data["roads"]:
+		var points: Array = road["points"]
+		var width := 7.0 if road["kind"] in ["primary","secondary","trunk"] else 4.0
+		for i in range(points.size()-1):
+			var p := Vector3(points[i][0],0.025,points[i][1])
+			var q := Vector3(points[i+1][0],0.025,points[i+1][1])
+			var d := q-p
+			if d.length() < 0.2:
+				continue
+			var basis := Basis(Vector3.UP,atan2(d.x,d.z)).scaled_local(Vector3(width,1,d.length()+0.2))
+			transforms.append(Transform3D(basis,(p+q)/2))
+			if not map_loaded and d.length()>15 and width>=7:
+				map_spawn = (p+q)/2 + Vector3(0,0.85,0)
+				map_loaded = true
+	if transforms.is_empty():
+		return false
+	var batch := MultiMesh.new()
+	batch.transform_format = MultiMesh.TRANSFORM_3D
+	batch.mesh = road_mesh
+	batch.instance_count = transforms.size()
+	for i in range(transforms.size()):
+		batch.set_instance_transform(i,transforms[i])
+	var roads := MultiMeshInstance3D.new()
+	roads.multimesh = batch
+	roads.material_override = asphalt
+	add_child(roads)
+	for building in data.get("buildings",[]):
+		var points: Array = building["points"]
+		if points.size()<4:
+			continue
+		var polygon := PackedVector2Array()
+		for i in range(points.size()-1):
+			polygon.append(Vector2(points[i][0],points[i][1]))
+		if Geometry2D.triangulate_polygon(polygon).is_empty():
+			continue
+		var center := Vector2.ZERO
+		for p in polygon:
+			center += p
+		center /= polygon.size()
+		var local := PackedVector2Array()
+		for p in polygon:
+			local.append(p-center)
+		var shape := CSGPolygon3D.new()
+		shape.polygon = local
+		shape.depth = 5
+		shape.rotation_degrees.x = 90
+		shape.position = Vector3(center.x,5,center.y)
+		shape.material = material(Color(0.7,0.63,0.52))
+		add_child(shape)
+	map_loaded = true
+	return true
