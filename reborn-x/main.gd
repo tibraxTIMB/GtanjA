@@ -23,6 +23,7 @@ var cargo_meshes: Array[MeshInstance3D] = []
 var cargo_selected := -1
 var cargo_kind := 0
 var sorted_count := 0
+var sorting_bays: Array[Vector3] = []
 var sorting_errors := 0
 var sorting_feedback := ""
 const SORT_NAMES = ["Hageavfall","Jord","Stein","Møblar"]
@@ -218,6 +219,7 @@ func _ready() -> void:
 	if saved.load("user://reborn_x_career.cfg") == OK:
 		career_xp = int(saved.get_value("career","xp",0))
 		career_jobs = int(saved.get_value("career","jobs",0))
+	setup_sorting_bays()
 	setup_traffic()
 	setup_audio()
 	var hud := CanvasLayer.new()
@@ -325,17 +327,17 @@ func control(label: String, pressed: bool) -> void:
 				refresh_cargo()
 		"SORTER":
 			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2 and cargo_selected>=0 and cargo_selected<cargo.items.size():
-				if trailer.global_position.distance_to(destination)>20:
+				if nearest_sorting_bay() < 0:
 					sorting_feedback = "Køyr til leveringsområdet først"
 				elif cargo.items[cargo_selected]["secured"]:
 					sorting_feedback = "Frigjer spennbandet først"
-				elif int(cargo.items[cargo_selected].get("kind",0)) != cargo_kind:
+				elif nearest_sorting_bay() != int(cargo.items[cargo_selected].get("kind",0)):
 					sorting_errors += 1
 					sorting_feedback = "BIR-Berit: Feil sortering!"
 				else:
 					sorted_count += 1
 					career_xp += 25
-					sorting_feedback = "Godkjend sortering: "+SORT_NAMES[cargo_kind]
+					sorting_feedback = "Godkjend sortering: "+SORT_NAMES[nearest_sorting_bay()]
 					control("LOSS",true)
 					var saved := ConfigFile.new()
 					saved.set_value("career","xp",career_xp)
@@ -606,3 +608,32 @@ func refresh_cargo() -> void:
 			cargo_straps.append(strap)
 		var mat: StandardMaterial3D = cargo_meshes[i].material_override
 		mat.albedo_color = Color(0.25,0.55,0.3) if cargo.items[i]["secured"] else CARGO_TYPES[int(cargo.items[i].get("kind",0))]["color"]
+
+func setup_sorting_bays() -> void:
+	# Fictional test layout; not a surveyed BIR facility.
+	for i in range(4):
+		var pos := destination + Vector3((i-1.5)*6.0,0,10)
+		sorting_bays.append(pos-Vector3(0,0,4))
+		var color := Color(0.22,0.42,0.32)
+		block(self,pos+Vector3(0,0.15,0),Vector3(4,0.3,3),color,true)
+		for x in [-1.9,1.9]:
+			block(self,pos+Vector3(x,1.1,0),Vector3(0.15,2,3),color,true)
+		block(self,pos+Vector3(0,1.1,1.45),Vector3(4,2,0.15),color,true)
+		block(self,sorting_bays[i]+Vector3(0,0.04,0),Vector3(4,0.05,5),Color(0.7,0.6,0.2))
+		var sign := Label3D.new()
+		add_child(sign)
+		sign.position = pos+Vector3(0,2.5,0)
+		sign.text = SORT_NAMES[i]
+		sign.font_size = 64
+		sign.pixel_size = 0.015
+		sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+
+func nearest_sorting_bay() -> int:
+	var best := -1
+	var distance := 2.8
+	for i in range(sorting_bays.size()):
+		var d := Vector2(trailer.global_position.x-sorting_bays[i].x,trailer.global_position.z-sorting_bays[i].z).length()
+		if d < distance:
+			best = i
+			distance = d
+	return best
