@@ -1,0 +1,57 @@
+name: Hardanger Web
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hardanger-web.yml'
+permissions:
+  contents: write
+  actions: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardanger-vector-map
+          run-id: 45501791253
+          github-token: ${{ github.token }}
+          path: reborn-x/data
+      - name: Export browser game
+        run: |
+          set -euo pipefail
+          base=https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable
+          curl -fL "$base/Godot_v4.4.1-stable_linux.x86_64.zip" -o godot.zip
+          unzip -q godot.zip
+          sudo install Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+          curl -fL "$base/Godot_v4.4.1-stable_export_templates.tpz" -o templates.zip
+          unzip -q templates.zip
+          mkdir -p ~/.local/share/godot/export_templates
+          mv templates ~/.local/share/godot/export_templates/4.4.1.stable
+          cat > reborn-x/export_presets.cfg <<'EOF'
+          [preset.0]
+          name="Web"
+          platform="Web"
+          runnable=true
+          export_filter="all_resources"
+          include_filter="data/*.json,data/*.f32"
+          exclude_filter=""
+          [preset.0.options]
+          variant/thread_support=false
+          vram_texture_compression/for_desktop=true
+          vram_texture_compression/for_mobile=true
+          EOF
+          mkdir -p hardanger-drive
+          godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
+          godot --headless --path reborn-x --export-release Web "$PWD/hardanger-drive/index.html"
+          test -s hardanger-drive/index.wasm
+          test -s hardanger-drive/index.pck
+      - name: Publish browser files without replacing existing games
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add hardanger-drive
+          git commit -m "Publish Hardanger Free Drive browser build"
+          git push origin HEAD:main
