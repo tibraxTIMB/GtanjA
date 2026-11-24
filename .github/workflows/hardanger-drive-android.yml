@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 25c308c5f5366f377ac19e2e21ac96b13a623820
+          ref: 152a11cf0fb2da53f54eaad09e432a467345e9b8
       - uses: actions/download-artifact@v4
         with:
           name: hardanger-vector-map
@@ -46,7 +46,6 @@ jobs:
       - name: Validate and export
         run: |
           set -o pipefail
-          sed -i '/^rendering\/textures\/vram_compression\/import_etc2_astc=/d; /^textures\/vram_compression\/import_etc2_astc=/d; /^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' reborn-x/project.godot
           godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
           if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
