@@ -8,6 +8,11 @@ var throttle := false
 var braking := false
 var reverse := false
 var speed_label: Label
+var camera_mode := 0
+var wheel_touch := -1
+var wheel_angle := 0.0
+var wheel_last := 0.0
+var wheel_panel: Control
 
 func material(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -88,6 +93,33 @@ func _ready() -> void:
 	block(trailer, Vector3.ZERO, Vector3(1.65,0.25,2.8), Color.SILVER)
 	for x in [-0.8,0.8]:
 		block(trailer, Vector3(x,0.4,0), Vector3(0.08,0.65,2.8), Color.SILVER)
+	for x in [-0.92,0.92]:
+		var tire_body := RigidBody3D.new()
+		tire_body.mass = 12
+		add_child(tire_body)
+		tire_body.position = trailer.position + Vector3(x,-0.35,0)
+		var tire_shape := CylinderShape3D.new()
+		tire_shape.radius = 0.34
+		tire_shape.height = 0.22
+		var tire_collision := CollisionShape3D.new()
+		tire_collision.shape = tire_shape
+		tire_body.add_child(tire_collision)
+		tire_collision.rotation_degrees.z = 90
+		var tire_visual := MeshInstance3D.new()
+		var tire_mesh := CylinderMesh.new()
+		tire_mesh.top_radius = 0.34
+		tire_mesh.bottom_radius = 0.34
+		tire_mesh.height = 0.22
+		tire_visual.mesh = tire_mesh
+		tire_visual.rotation_degrees.z = 90
+		tire_visual.material_override = material(Color(0.04,0.04,0.04))
+		tire_body.add_child(tire_visual)
+		var axle := HingeJoint3D.new()
+		add_child(axle)
+		axle.position = tire_body.position
+		axle.rotation_degrees.y = 90
+		axle.node_a = axle.get_path_to(trailer)
+		axle.node_b = axle.get_path_to(tire_body)
 	var joint := PinJoint3D.new()
 	add_child(joint)
 	joint.position = car.position + Vector3(0,0,-2.2)
@@ -107,7 +139,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["VENSTRE","HØGRE","D/R","BREMS","GASS"]:
+	for label in ["D/R","BREMS","GASS","KAMERA"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -115,22 +147,56 @@ func _ready() -> void:
 		button.button_down.connect(func(): control(label,true))
 		button.button_up.connect(func(): control(label,false))
 
+	wheel_panel = Control.new()
+	hud.add_child(wheel_panel)
+	wheel_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	wheel_panel.offset_top = -240
+	wheel_panel.offset_right = 220
+	wheel_panel.offset_bottom = -110
+	wheel_panel.gui_input.connect(wheel_input)
+	var wheel_text := Label.new()
+	wheel_panel.add_child(wheel_text)
+	wheel_text.text = "◉ RATT"
+	wheel_text.add_theme_font_size_override("font_size", 38)
+	wheel_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func wheel_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if event.pressed and wheel_touch == -1:
+			wheel_touch = event.index
+			wheel_last = (event.position - wheel_panel.size/2).angle()
+		elif not event.pressed and event.index == wheel_touch:
+			wheel_touch = -1
+	elif event is InputEventScreenDrag and event.index == wheel_touch:
+		var bearing := (event.position - wheel_panel.size/2).angle()
+		wheel_angle = clampf(wheel_angle + wrapf(bearing-wheel_last,-PI,PI),-PI,PI)
+		wheel_last = bearing
+
 func control(label: String, pressed: bool) -> void:
 	match label:
 		"VENSTRE": steering = -1.0 if pressed else 0.0
 		"HØGRE": steering = 1.0 if pressed else 0.0
 		"GASS": throttle = pressed
 		"BREMS": braking = pressed
+		"KAMERA":
+			if pressed:
+				camera_mode = (camera_mode+1)%3
 		"D/R":
 			if pressed and car.linear_velocity.length() < 0.5:
 				reverse = not reverse
 
 func _physics_process(delta: float) -> void:
-	var steer_input := steering + Input.get_axis("ui_left","ui_right")
+	if wheel_touch == -1:
+		wheel_angle = lerpf(wheel_angle,0.0,minf(delta*8,1))
+	var steer_input := wheel_angle/PI + steering + Input.get_axis("ui_left","ui_right")
 	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45, minf(delta*7,1))
 	car.engine_force = (-650.0 if reverse else 650.0) if throttle or Input.is_action_pressed("ui_up") else 0.0
 	car.brake = 35.0 if braking or Input.is_action_pressed("ui_down") else 0.0
 	var target := car.global_position + car.global_basis * Vector3(0,6,-12)
+	if camera_mode == 1:
+		target = car.global_position + Vector3(0,25,-0.1)
+	elif camera_mode == 2:
+		target = trailer.global_position + trailer.global_basis * Vector3(0,4,-8)
 	camera.position = camera.position.lerp(target,minf(delta*5,1))
 	camera.look_at(car.global_position + Vector3.UP)
 	speed_label.text = "REBORN X | %d km/t | %s" % [roundi(car.linear_velocity.length()*3.6),"R" if reverse else "D"]
