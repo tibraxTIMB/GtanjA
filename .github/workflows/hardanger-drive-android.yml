@@ -46,6 +46,7 @@ jobs:
       - name: Validate and export
         run: |
           set -o pipefail
+          sed -i '/^rendering\/textures\/vram_compression\/import_etc2_astc=/d; /^textures\/vram_compression\/import_etc2_astc=/d; /^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' reborn-x/project.godot
           godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
           if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
           export GODOT_ANDROID_KEYSTORE_DEBUG_PATH="$HOME/.android/debug.keystore"
