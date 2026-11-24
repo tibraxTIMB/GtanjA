@@ -35,8 +35,12 @@ jobs:
         with:
           name: hardanger-vector-map
           path: reborn-x/data/hardanger.json
-      - run: python reborn-x/tools/import_sandvenhagen.py
+      - run: python reborn-x/tools/import_sandvenhagen.py hardanger.osm.pbf
       - run: python reborn-x/tools/project_sandvenhagen.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sandvenhagen-detail
+          path: reborn-x/data/sandvenhagen*
       - run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Terrain acquisition
         run: |
