@@ -10,6 +10,9 @@ var throttle := false
 var braking := false
 var reverse := false
 var speed_label: Label
+var traffic: Array[Dictionary] = []
+var traffic_route: Array[Vector3] = []
+var motor_audio: AudioStreamPlayer3D
 var camera_mode := 0
 var camera_distance := 12.0
 var mission_stage := 0
@@ -180,6 +183,8 @@ func _ready() -> void:
 	if saved.load("user://reborn_x_career.cfg") == OK:
 		career_xp = int(saved.get_value("career","xp",0))
 		career_jobs = int(saved.get_value("career","jobs",0))
+	setup_traffic()
+	setup_audio()
 	var hud := CanvasLayer.new()
 	add_child(hud)
 	speed_label = Label.new()
@@ -274,6 +279,10 @@ func control(label: String, pressed: bool) -> void:
 				reverse = not reverse
 
 func _physics_process(delta: float) -> void:
+	update_traffic(delta)
+	if is_instance_valid(motor_audio):
+		motor_audio.pitch_scale = 0.8 + clampf(car.linear_velocity.length()/18.0,0.0,1.0)*1.4
+		motor_audio.volume_db = -24.0 if throttle else -32.0
 	if wheel_touch == -1:
 		wheel_angle = lerpf(wheel_angle,0.0,minf(delta*8,1))
 	var distance := car.global_position.distance_to(destination)
@@ -366,3 +375,61 @@ func load_geography() -> bool:
 		add_child(shape)
 	map_loaded = true
 	return true
+
+func setup_traffic() -> void:
+	if map_loaded:
+		return
+	traffic_route = [Vector3(-80,0,-100),Vector3(80,0,-100),Vector3(80,0,100),Vector3(-80,0,100)]
+	for i in range(3):
+		var vehicle := AnimatableBody3D.new()
+		add_child(vehicle)
+		vehicle.position = traffic_route[i]
+		add_shape(vehicle,Vector3(1.8,1.1,4.2),Vector3(0,0.8,0))
+		block(vehicle,Vector3(0,0.7,0),Vector3(1.8,0.7,4.2),Color(0.2,0.35+i*0.15,0.65))
+		block(vehicle,Vector3(0,1.3,0),Vector3(1.6,0.6,2),Color(0.25,0.4,0.5))
+		traffic.append({"body":vehicle,"next":(i+1)%4,"speed":0.0})
+
+func update_traffic(delta: float) -> void:
+	for entry in traffic:
+		var vehicle: AnimatableBody3D = entry["body"]
+		var target: Vector3 = traffic_route[entry["next"]]
+		var direction := target-vehicle.position
+		if direction.length()<0.5:
+			entry["next"] = (int(entry["next"])+1)%traffic_route.size()
+			continue
+		direction = direction.normalized()
+		var blocked := false
+		for obstacle in [car,trailer]:
+			var relative: Vector3 = obstacle.global_position-vehicle.global_position
+			relative.y = 0
+			if relative.length()<12 and relative.dot(direction)>0 and relative.cross(direction).length()<3:
+				blocked = true
+		for other in traffic:
+			if other == entry:
+				continue
+			var relative: Vector3 = other["body"].global_position-vehicle.global_position
+			if relative.length()<12 and relative.dot(direction)>0 and relative.cross(direction).length()<3:
+				blocked = true
+		entry["speed"] = move_toward(float(entry["speed"]),0.0 if blocked else 8.0,delta*4)
+		vehicle.rotation.y = atan2(direction.x,direction.z)
+		vehicle.position += direction*float(entry["speed"])*delta
+
+func setup_audio() -> void:
+	var sample_rate := 22050
+	var samples := PackedByteArray()
+	samples.resize(sample_rate*2)
+	for i in range(sample_rate):
+		var t := float(i)/sample_rate
+		var value := sin(TAU*40*t)*0.45+sin(TAU*80*t)*0.25+sin(TAU*120*t)*0.1
+		samples.encode_s16(i*2,roundi(value*12000))
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_rate
+	stream.data = samples
+	stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	stream.loop_end = sample_rate
+	motor_audio = AudioStreamPlayer3D.new()
+	car.add_child(motor_audio)
+	motor_audio.stream = stream
+	motor_audio.volume_db = -32
+	motor_audio.play()
