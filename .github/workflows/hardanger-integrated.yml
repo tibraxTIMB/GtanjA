@@ -43,6 +43,8 @@ jobs:
           path: reborn-x/data/sandvenhagen*
       - run: sudo apt-get update && sudo apt-get install -y gdal-bin
       - name: Terrain acquisition
+        id: kartverket
+        continue-on-error: true
         run: |
           python - <<'PY'
           from pyproj import Transformer
@@ -55,7 +57,18 @@ jobs:
           r=3510
           subprocess.run(["gdal_translate","-projwin",str(e-r),str(n+r),str(e+r),str(n-r),"-tr","10","10",layers[0].strip(),"terrain.tif"],check=True)
           PY
-      - run: python reborn-x/tools/import_terrain.py terrain.tif --license "Pending dataset license verification; test only" --source-url "https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+      - name: Import Kartverket terrain
+        id: national_dem
+        if: steps.kartverket.outcome == 'success'
+        continue-on-error: true
+        run: python reborn-x/tools/import_terrain.py terrain.tif --license "Pending dataset license verification; test only" --source-url "https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+      - name: Copernicus GLO-30 fallback
+        if: steps.national_dem.outcome != 'success'
+        run: |
+          tile=Copernicus_DSM_COG_10_N60_00_E006_00_DEM
+          url="https://copernicus-dem-30m.s3.amazonaws.com/$tile/$tile.tif"
+          curl --fail --location --retry 2 --max-time 180 "$url" -o copernicus.tif
+          python reborn-x/tools/import_terrain.py copernicus.tif --step 20 --license "Copernicus DEM public licence; test only; verify attribution before distribution" --source-url "$url"
       - run: python reborn-x/tools/validate_geography.py
       - uses: actions/upload-artifact@v4
         with:
