@@ -21,6 +21,13 @@ var cargo_mass := 0.0
 var cargo = preload("res://cargo_engineering.gd").new()
 var cargo_meshes: Array[MeshInstance3D] = []
 var cargo_selected := -1
+var cargo_kind := 0
+const CARGO_TYPES = [
+	{"name":"Kvist","mass":25.0,"friction":0.55,"size":Vector3(0.55,0.45,0.65),"color":Color(0.32,0.43,0.18)},
+	{"name":"Jord","mass":100.0,"friction":0.5,"size":Vector3(0.55,0.35,0.55),"color":Color(0.32,0.21,0.12)},
+	{"name":"Stein","mass":150.0,"friction":0.65,"size":Vector3(0.45,0.35,0.45),"color":Color(0.48,0.49,0.5)},
+	{"name":"Møblar","mass":45.0,"friction":0.3,"size":Vector3(0.55,0.65,0.55),"color":Color(0.65,0.43,0.24)}
+]
 var cargo_touch := -1
 var previous_trailer_velocity := Vector3.ZERO
 var tailgate: Node3D
@@ -224,7 +231,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE","LASTTYPE"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -285,14 +292,19 @@ func control(label: String, pressed: bool) -> void:
 				gate_drag = pressed
 			else:
 				gate_drag = false
+		"LASTTYPE":
+			if pressed:
+				cargo_kind = (cargo_kind+1)%CARGO_TYPES.size()
 		"LAST":
 			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2:
 				if cargo.items.size()<3:
 					var pos := Vector3(0,0.4,-0.8+0.8*cargo.items.size())
-					if cargo.add_item(50.0,pos):
+					var kind: Dictionary = CARGO_TYPES[cargo_kind]
+					if cargo.add_item(kind["mass"],pos,kind["friction"]):
+						cargo.items[-1]["kind"] = cargo_kind
 						var mesh := MeshInstance3D.new()
 						var crate := BoxMesh.new()
-						crate.size = Vector3(0.55,0.5,0.55)
+						crate.size = kind["size"]
 						mesh.mesh = crate
 						mesh.material_override = material(Color(0.45,0.3,0.16))
 						trailer.add_child(mesh)
@@ -350,6 +362,7 @@ func _physics_process(delta: float) -> void:
 			saved.set_value("career","jobs",career_jobs)
 			saved.save("user://reborn_x_career.cfg")
 	mission_label.text = ("Last Tanja og lever ved GPS-målet" if mission_stage == 0 else "Oppdrag fullført") + " | %d XP | %d kg | %s" % [career_xp,roundi(cargo_mass),"Kopla" if hitch.node_b != NodePath("") else "Fråkopla"]
+	mission_label.text += "\nLasttype: %s | Kuletrykkbidrag: %.1f kg" % [CARGO_TYPES[cargo_kind]["name"],cargo.hitch_load_kg()]
 	var steer_input := wheel_angle/PI + steering + Input.get_axis("ui_left","ui_right")
 	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45*(1.0-0.5*clampf(car.linear_velocity.length()/20.0,0.0,1.0)), minf(delta*7,1))
 	car.engine_force = (-650.0 if reverse else 650.0) if throttle or Input.is_action_pressed("ui_up") else 0.0
@@ -543,4 +556,4 @@ func refresh_cargo() -> void:
 	for i in range(cargo_meshes.size()):
 		cargo_meshes[i].position = cargo.items[i]["position"]
 		var mat: StandardMaterial3D = cargo_meshes[i].material_override
-		mat.albedo_color = Color(0.25,0.55,0.3) if cargo.items[i]["secured"] else Color(0.45,0.3,0.16)
+		mat.albedo_color = Color(0.25,0.55,0.3) if cargo.items[i]["secured"] else CARGO_TYPES[int(cargo.items[i].get("kind",0))]["color"]
