@@ -4,12 +4,14 @@ on:
   push:
     paths:
       - '.github/workflows/hardanger-import.yml'
+      - 'tools/import-osm.mjs'
+      - 'tools/project-map.mjs'
 permissions:
   contents: write
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
