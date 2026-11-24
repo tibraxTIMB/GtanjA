@@ -18,6 +18,11 @@ var camera_distance := 12.0
 var mission_stage := 0
 var hitch: PinJoint3D
 var cargo_mass := 0.0
+var cargo = preload("res://cargo_engineering.gd").new()
+var cargo_meshes: Array[MeshInstance3D] = []
+var cargo_selected := -1
+var cargo_touch := -1
+var previous_trailer_velocity := Vector3.ZERO
 var tailgate: Node3D
 var tailgate_open := false
 var tailgate_locked := true
@@ -219,7 +224,7 @@ func _ready() -> void:
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -282,20 +287,28 @@ func control(label: String, pressed: bool) -> void:
 				gate_drag = false
 		"LAST":
 			if pressed and tailgate_open and trailer.linear_velocity.length()<0.2:
-				cargo_mass = 150.0 if cargo_mass == 0 else 0.0
-				trailer.mass = 230.0+cargo_mass
-				trailer.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-				trailer.center_of_mass = Vector3(0,0.2 if cargo_mass>0 else 0,0.15 if cargo_mass>0 else 0)
-				if is_instance_valid(cargo_visual):
-					cargo_visual.queue_free()
-				if cargo_mass>0:
-					cargo_visual = MeshInstance3D.new()
-					var crate := BoxMesh.new()
-					crate.size = Vector3(1.2,0.5,1.5)
-					cargo_visual.mesh = crate
-					cargo_visual.material_override = material(Color(0.45,0.3,0.16))
-					trailer.add_child(cargo_visual)
-					cargo_visual.position = Vector3(0,0.4,0.2)
+				if cargo.items.size()<3:
+					var pos := Vector3(0,0.4,-0.8+0.8*cargo.items.size())
+					if cargo.add_item(50.0,pos):
+						var mesh := MeshInstance3D.new()
+						var crate := BoxMesh.new()
+						crate.size = Vector3(0.55,0.5,0.55)
+						mesh.mesh = crate
+						mesh.material_override = material(Color(0.45,0.3,0.16))
+						trailer.add_child(mesh)
+						cargo_meshes.append(mesh)
+						cargo_selected = cargo.items.size()-1
+				else:
+					for mesh in cargo_meshes:
+						mesh.queue_free()
+					cargo_meshes.clear()
+					cargo.items.clear()
+					cargo_selected = -1
+				refresh_cargo()
+		"SIKRE":
+			if pressed and cargo_selected>=0 and trailer.linear_velocity.length()<0.2:
+				cargo.secure(cargo_selected,not cargo.items[cargo_selected]["secured"])
+				refresh_cargo()
 		"ZOOM":
 			if pressed:
 				camera_distance = 18.0 if camera_distance < 15.0 else 9.0
@@ -307,6 +320,11 @@ func control(label: String, pressed: bool) -> void:
 				reverse = not reverse
 
 func _physics_process(delta: float) -> void:
+	var acceleration := trailer.global_basis.inverse() * (trailer.linear_velocity-previous_trailer_velocity)/maxf(delta,0.001)
+	previous_trailer_velocity = trailer.linear_velocity
+	if not cargo.items.is_empty():
+		cargo.shift_load(acceleration,delta)
+		refresh_cargo()
 	if is_instance_valid(tailgate):
 		tailgate.rotation.x = -gate_angle
 		tailgate_open = gate_angle > 1.45
@@ -468,6 +486,27 @@ func setup_audio() -> void:
 	motor_audio.play()
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(camera) and is_instance_valid(trailer) and tailgate_open and trailer.linear_velocity.length()<0.2:
+		if event is InputEventScreenTouch and event.pressed:
+			for i in range(cargo_meshes.size()):
+				var point := cargo_meshes[i].global_position
+				if not camera.is_position_behind(point) and camera.unproject_position(point).distance_to(event.position)<30:
+					cargo_selected = i
+					cargo_touch = event.index
+					get_viewport().set_input_as_handled()
+					return
+		if event is InputEventScreenDrag and event.index == cargo_touch and cargo_selected>=0:
+			if not cargo.items[cargo_selected]["secured"]:
+				var pos: Vector3 = cargo.items[cargo_selected]["position"]
+				pos.z = clampf(pos.z-event.relative.y*0.005,-1.2,1.2)
+				pos.x = clampf(pos.x+event.relative.x*0.005,-0.65,0.65)
+				cargo.items[cargo_selected]["position"] = pos
+				refresh_cargo()
+			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventScreenTouch and not event.pressed and event.index == cargo_touch:
+		cargo_touch = -1
+		return
 	if not is_instance_valid(tailgate) or not is_instance_valid(camera):
 		return
 	if event is InputEventScreenTouch and event.pressed and trailer.linear_velocity.length()<0.2:
@@ -497,3 +536,11 @@ func _input(event: InputEvent) -> void:
 		gate_angle = clampf(gate_angle + event.relative.y*0.008,0.0,PI/2)
 	if event is InputEventScreenTouch and not event.pressed:
 		gate_drag = false
+
+func refresh_cargo() -> void:
+	cargo_mass = cargo.total_mass()-230.0
+	cargo.apply_to(trailer)
+	for i in range(cargo_meshes.size()):
+		cargo_meshes[i].position = cargo.items[i]["position"]
+		var mat: StandardMaterial3D = cargo_meshes[i].material_override
+		mat.albedo_color = Color(0.25,0.55,0.3) if cargo.items[i]["secured"] else Color(0.45,0.3,0.16)
