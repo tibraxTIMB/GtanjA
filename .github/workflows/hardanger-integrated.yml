@@ -9,14 +9,32 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install pyproj rasterio numpy
-      - run: python reborn-x/tools/import_map.py
+      - run: sudo apt-get update && sudo apt-get install -y osmium-tool
+      - run: pip install osmium
+      - uses: actions/cache@v4
+        with:
+          path: hardanger.osm.pbf
+          key: hardanger-osm-v1-${{ github.run_id }}
+          restore-keys: hardanger-osm-v1-
+      - name: Acquire local OSM extract
+        run: |
+          if [ ! -s hardanger.osm.pbf ]; then
+            curl --fail --location --retry 3 --max-time 1200 https://download.geofabrik.de/europe/norway-latest.osm.pbf -o norway.osm.pbf
+            osmium extract -b 6.125,60.350,6.235,60.405 -s complete_ways norway.osm.pbf -o hardanger.osm.pbf
+            rm norway.osm.pbf
+          fi
+          python reborn-x/tools/import_pbf.py hardanger.osm.pbf
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardanger-vector-map
+          path: reborn-x/data/hardanger.json
       - run: python reborn-x/tools/import_sandvenhagen.py
       - run: python reborn-x/tools/project_sandvenhagen.py
       - run: sudo apt-get update && sudo apt-get install -y gdal-bin
