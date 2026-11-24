@@ -1,5 +1,6 @@
 /* GTanjA physics core – arcade units, not certified vehicle simulation */
 (function(root){
+function loadStats(cargo){const mass=cargo.reduce((n,o)=>n+o.kg,0);return {mass,balance:mass?cargo.reduce((n,o)=>n+o.kg*(o.x+o.w/2-3),0)/mass:0};}
 function step(p,input,dt){
  const mass=Math.max(0,input.mass||0),load=Math.min(1,mass/500),attached=input.attached;
  const throttle=input.forward===input.reverse?0:input.forward?1:-1;
@@ -13,5 +14,5 @@ function step(p,input,dt){
  const angle=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
  return {x,y,a,b,v,steer,hx,hy,tx:hx-43*Math.cos(b),ty:hy-43*Math.sin(b),jackknife:attached&&target<0&&Math.abs(angle(a,b))>1.35&&Math.abs(angle(a,b))>Math.abs(angle(p.a,p.b))};
 }
-root.GTPhysics={step};
+root.GTPhysics={step,loadStats};
 })(globalThis);
