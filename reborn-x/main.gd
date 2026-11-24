@@ -286,7 +286,7 @@ func wheel_input(event: InputEvent) -> void:
 		elif not event.pressed and event.index == wheel_touch:
 			wheel_touch = -1
 	elif event is InputEventScreenDrag and event.index == wheel_touch:
-		var bearing: String = (event.position - wheel_panel.size/2).angle()
+		var bearing: float = (event.position - wheel_panel.size/2).angle()
 		wheel_angle = clampf(wheel_angle + wrapf(bearing-wheel_last,-PI,PI),-PI,PI)
 		wheel_last = bearing
 
