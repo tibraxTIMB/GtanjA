@@ -19,7 +19,7 @@ a=p.parse_args()
 if a.radius<=0: p.error("radius must be positive")
 e,n=Transformer.from_crs(4326,25832,always_xy=True).transform(6.18,60.3775)
 size=2*a.radius//a.step+1
-if size>2001: p.error("Use a smaller tile for mobile memory")
+if size*size>1000000: p.error("Use a smaller tile for mobile memory")
 grid=np.full((size,size),np.nan,dtype=np.float32)
 with rasterio.open(a.input) as src:
     if src.crs is None: raise ValueError("Missing source CRS")
@@ -28,4 +28,4 @@ if not np.isfinite(grid).all(): raise ValueError("Incomplete terrain coverage: n
 root=Path(__file__).resolve().parents[1]/"data"
 root.mkdir(exist_ok=True)
 (root/"terrain.f32").write_bytes(grid.astype("<f4").tobytes())
-(root/"terrain.json").write_text(json.dumps({"width":size,"height":size,"step":a.step,"x0":-a.radius,"z0":-a.radius,"crs":"EPSG:25832","origin":[e,n],"min":float(grid.min()),"max":float(grid.max()),"source":a.source_url,"license":a.license,"attribution":"Kartverket (verify source metadata)","format":"little-endian float32 row-major north to south"},indent=2))
+(root/"terrain.json").write_text(json.dumps({"width":size,"height":size,"step":a.step,"x0":-a.radius,"z0":-a.radius,"crs":"EPSG:25832","origin":[e,n],"min":float(grid.min()),"max":float(grid.max()),"source":a.source_url,"license":a.license,"attribution":"Copernicus DEM (verify source metadata)" if "copernicus" in a.source_url.lower() else "Kartverket (verify source metadata)","format":"little-endian float32 row-major north to south"},indent=2))
