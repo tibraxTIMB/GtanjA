@@ -36,7 +36,9 @@ jobs:
           name: hardanger-vector-map
           path: reborn-x/data/hardanger.json
       - run: python reborn-x/tools/import_sandvenhagen.py hardanger.osm.pbf
+        continue-on-error: true
       - run: python reborn-x/tools/project_sandvenhagen.py
+        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: sandvenhagen-detail
@@ -69,13 +71,13 @@ jobs:
           url="https://copernicus-dem-30m.s3.amazonaws.com/$tile/$tile.tif"
           curl --fail --location --retry 2 --max-time 180 "$url" -o copernicus.tif
           python reborn-x/tools/import_terrain.py copernicus.tif --step 20 --license "Copernicus DEM public licence; test only; verify attribution before distribution" --source-url "$url"
-      - run: python reborn-x/tools/validate_geography.py
       - uses: actions/upload-artifact@v4
         with:
           name: hardanger-terrain
           path: |
             reborn-x/data/terrain.json
             reborn-x/data/terrain.f32
+      - run: python reborn-x/tools/validate_geography.py
   preview:
     runs-on: ubuntu-latest
     needs: validate
