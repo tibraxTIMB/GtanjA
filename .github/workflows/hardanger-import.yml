@@ -1,0 +1,25 @@
+name: Import Hardanger map
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hardanger-import.yml'
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node tools/import-osm.mjs
+      - run: node tools/project-map.mjs
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/hardanger-osm.json data/hardanger-world.json
+          git diff --cached --quiet || git commit -m "Import Hardanger geographic dataset"
+          git push
