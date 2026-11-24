@@ -242,53 +242,114 @@ func _ready() -> void:
 	setup_audio()
 	var hud := CanvasLayer.new()
 	add_child(hud)
+	var root := Control.new()
+	hud.add_child(root)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	speed_label = Label.new()
-	hud.add_child(speed_label)
-	speed_label.position = Vector2(20,20)
-	speed_label.add_theme_font_size_override("font_size",24)
+	root.add_child(speed_label)
+	speed_label.position = Vector2(24,18)
+	speed_label.add_theme_font_size_override("font_size",32)
 	mission_label = Label.new()
-	hud.add_child(mission_label)
-	mission_label.position = Vector2(20,55)
-	mission_label.add_theme_font_size_override("font_size",20)
+	root.add_child(mission_label)
+	mission_label.position = Vector2(24,100)
+	mission_label.hide()
 	map_label = Label.new()
-	hud.add_child(map_label)
-	map_label.position = Vector2(20,85)
-	var controls := HBoxContainer.new()
-	hud.add_child(controls)
-	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM","KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE","LASTTYPE","LOSS","SORTER"]:
-		var button := Button.new()
-		button.text = label
-		button.custom_minimum_size = Vector2(120,80)
-		controls.add_child(button)
-		button.button_down.connect(func(): control(label,true))
-		button.button_up.connect(func(): control(label,false))
-
+	root.add_child(map_label)
+	map_label.position = Vector2(24,60)
+	var tools := GridContainer.new()
+	tools.columns = 3
+	root.add_child(tools)
+	tools.position = Vector2(350,150)
+	tools.hide()
+	for action in ["KOPLING","LAST","V LÅS","H LÅS","BAKLUKE","SIKRE","LASTTYPE","LOSS","SORTER"]:
+		var b := Button.new()
+		b.text = action
+		b.custom_minimum_size = Vector2(170,65)
+		tools.add_child(b)
+		b.button_down.connect(func(): control(action,true))
+		b.button_up.connect(func(): control(action,false))
+	var menu := Button.new()
+	menu.text = "PARKERING / TANJA"
+	root.add_child(menu)
+	menu.position = Vector2(24,105)
+	menu.size = Vector2(245,55)
+	menu.pressed.connect(func():
+		if car.linear_velocity.length()<0.5:
+			tools.visible = not tools.visible
+			mission_label.visible = tools.visible
+	)
+	for spec in [["KAMERA",Vector2(980,20),Vector2(130,65)],["ZOOM",Vector2(1120,20),Vector2(130,65)],["D/R",Vector2(1120,350),Vector2(130,75)]]:
+		var b := Button.new()
+		b.text = spec[0]
+		root.add_child(b)
+		b.position = spec[1]
+		b.size = spec[2]
+		var action: String = spec[0]
+		b.pressed.connect(func(): control(action,true))
 	wheel_panel = Control.new()
-	hud.add_child(wheel_panel)
-	wheel_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	wheel_panel.offset_top = -240
-	wheel_panel.offset_right = 220
-	wheel_panel.offset_bottom = -110
-	wheel_panel.gui_input.connect(wheel_input)
-	var wheel_text := Label.new()
-	wheel_panel.add_child(wheel_text)
-	wheel_text.text = "◉ RATT"
-	wheel_text.add_theme_font_size_override("font_size", 38)
-	wheel_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(wheel_panel)
+	wheel_panel.position = Vector2(30,420)
+	wheel_panel.size = Vector2(260,260)
+	wheel_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wheel_panel.draw.connect(func():
+		var c := Vector2(130,130)
+		wheel_panel.draw_circle(c,120,Color(0.08,0.10,0.12,0.8))
+		wheel_panel.draw_arc(c,110,0,TAU,80,Color(0.85,0.87,0.9),15,true)
+		for a in [0.0,TAU/3,2*TAU/3]:
+			wheel_panel.draw_line(c,c+Vector2.from_angle(a+wheel_angle)*105,Color(0.85,0.87,0.9),12,true)
+		wheel_panel.draw_circle(c,30,Color(0.25,0.28,0.3))
+	)
+	for spec in [["BREMS",Vector2(960,520),Vector2(125,160)],["GASS",Vector2(1100,455),Vector2(150,225)]]:
+		var pedal := Label.new()
+		root.add_child(pedal)
+		pedal.position = spec[1]
+		pedal.size = spec[2]
+		pedal.text = spec[0]
+		pedal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pedal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pedal.add_theme_font_size_override("font_size",28)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.12,0.18,0.15,0.85)
+		style.set_corner_radius_all(18)
+		style.set_border_width_all(3)
+		style.border_color = Color.WHITE
+		pedal.add_theme_stylebox_override("normal",style)
+		pedal.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-func wheel_input(event: InputEvent) -> void:
+var pedal_touches: Dictionary = {}
+
+func drive_touch(event: InputEvent) -> bool:
 	if event is InputEventScreenTouch:
-		if event.pressed and wheel_touch == -1:
-			wheel_touch = event.index
-			wheel_last = (event.position - wheel_panel.size/2).angle()
-		elif not event.pressed and event.index == wheel_touch:
-			wheel_touch = -1
-	elif event is InputEventScreenDrag and event.index == wheel_touch:
-		var bearing: float = (event.position - wheel_panel.size/2).angle()
-		wheel_angle = clampf(wheel_angle + wrapf(bearing-wheel_last,-PI,PI),-PI,PI)
-		wheel_last = bearing
+		if not event.pressed:
+			if event.index == wheel_touch:
+				wheel_touch = -1
+				return true
+			if pedal_touches.has(event.index):
+				pedal_touches.erase(event.index)
+				throttle = pedal_touches.values().has("GASS")
+				braking = pedal_touches.values().has("BREMS")
+				return true
+		else:
+			if Rect2(30,420,260,260).has_point(event.position) and wheel_touch == -1:
+				wheel_touch = event.index
+				wheel_last = (event.position-Vector2(160,550)).angle()
+				return true
+			for spec in [["GASS",Rect2(1100,455,150,225)],["BREMS",Rect2(960,520,125,160)]]:
+				if spec[1].has_point(event.position):
+					pedal_touches[event.index] = spec[0]
+					throttle = pedal_touches.values().has("GASS")
+					braking = pedal_touches.values().has("BREMS")
+					return true
+	elif event is InputEventScreenDrag:
+		if event.index == wheel_touch:
+			var bearing: float = (event.position-Vector2(160,550)).angle()
+			wheel_angle = clampf(wheel_angle+wrapf(bearing-wheel_last,-PI,PI),-PI,PI)
+			wheel_last = bearing
+			return true
+		if pedal_touches.has(event.index):
+			return true
+	return false
 
 func control(label: String, pressed: bool) -> void:
 	match label:
@@ -400,6 +461,8 @@ func _physics_process(delta: float) -> void:
 		motor_audio.volume_db = -24.0 if throttle else -32.0
 	if wheel_touch == -1:
 		wheel_angle = lerpf(wheel_angle,0.0,minf(delta*8,1))
+	if is_instance_valid(wheel_panel):
+		wheel_panel.queue_redraw()
 	var distance := car.global_position.distance_to(destination)
 	var relative := destination-car.global_position
 	var bearing := wrapf(atan2(relative.x,relative.z)-car.rotation.y,-PI,PI)
@@ -568,6 +631,9 @@ func setup_audio() -> void:
 	motor_audio.play()
 
 func _input(event: InputEvent) -> void:
+	if drive_touch(event):
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(camera) and is_instance_valid(trailer) and tailgate_open and trailer.linear_velocity.length()<0.2:
 		if event is InputEventScreenTouch and event.pressed:
 			for i in range(cargo_meshes.size()):
