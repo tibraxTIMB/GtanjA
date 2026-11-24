@@ -1,0 +1,3 @@
+# GTanjA 6 – The Bos Wars
+
+Budget: NOK 0. Standalone mobile-first game, never share code, data, deployment or configuration with GarasjeGym. No accounts, ads, paid APIs or runtime AI. Tanja is a shy, cheerful Brenderup 750XL with high sides. Rivals: Gunnar Gaupen, Tommy Tysse, Trine Tredal. NPCs include Regulerings-Rolf, Kvist-Kari and BIR-Berit. Nynorsk UI. First prototype: fictional Hardanger-inspired map, articulated trailer, reverse driving, waste collection and sorting before closing. Later: 3D, local geography, coupling, loading, washing, graffiti, smalltalk, rivals. Verify real BIR layout and rules before representing them as factual. Use original assets and licensed data. Keep local saves and offline support. Test on mobile before release.
