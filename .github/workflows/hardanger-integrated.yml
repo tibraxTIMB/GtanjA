@@ -26,9 +26,9 @@ jobs:
       - name: Acquire local OSM extract
         run: |
           if [ ! -s hardanger.osm.pbf ]; then
-            curl --fail --location --retry 3 --max-time 1200 https://download.geofabrik.de/europe/norway-latest.osm.pbf -o norway.osm.pbf
-            osmium extract -b 6.125,60.350,6.235,60.405 -s complete_ways norway.osm.pbf -o hardanger.osm.pbf
-            rm norway.osm.pbf
+            curl --fail --location --retry 3 --max-time 1200 https://download.geofabrik.de/europe/norway/vestlandet-latest.osm.pbf -o vestlandet.osm.pbf
+            osmium extract -b 6.125,60.350,6.235,60.405 -s complete_ways vestlandet.osm.pbf -o hardanger.osm.pbf
+            rm vestlandet.osm.pbf
           fi
           python reborn-x/tools/import_pbf.py hardanger.osm.pbf
       - uses: actions/upload-artifact@v4
