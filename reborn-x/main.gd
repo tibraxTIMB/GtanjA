@@ -11,6 +11,11 @@ var braking := false
 var reverse := false
 var speed_label: Label
 var camera_mode := 0
+var camera_distance := 12.0
+var mission_stage := 0
+var mission_label: Label
+var destination := Vector3(80,0,100)
+var map_label: Label
 var wheel_touch := -1
 var wheel_angle := 0.0
 var wheel_last := 0.0
@@ -159,17 +164,30 @@ func _ready() -> void:
 	add_child(camera)
 	camera.current = true
 	camera.position = car.position + Vector3(0,6,-12)
+	if map_loaded:
+		destination = map_spawn + Vector3(0,0,25)
+	else:
+		block(self,Vector3(80,0.05,100),Vector3(12,0.1,12),Color(0.8,0.65,0.15))
+		for i in range(3):
+			block(self,Vector3(90+i*5,1.2,110),Vector3(4,2.4,3),Color(0.2,0.45,0.35),true)
 	var hud := CanvasLayer.new()
 	add_child(hud)
 	speed_label = Label.new()
 	hud.add_child(speed_label)
 	speed_label.position = Vector2(20,20)
 	speed_label.add_theme_font_size_override("font_size",24)
+	mission_label = Label.new()
+	hud.add_child(mission_label)
+	mission_label.position = Vector2(20,55)
+	mission_label.add_theme_font_size_override("font_size",20)
+	map_label = Label.new()
+	hud.add_child(map_label)
+	map_label.position = Vector2(20,85)
 	var controls := HBoxContainer.new()
 	hud.add_child(controls)
 	controls.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	controls.offset_top = -100
-	for label in ["D/R","BREMS","GASS","KAMERA"]:
+	for label in ["D/R","BREMS","GASS","KAMERA","ZOOM"]:
 		var button := Button.new()
 		button.text = label
 		button.custom_minimum_size = Vector2(120,80)
@@ -208,6 +226,9 @@ func control(label: String, pressed: bool) -> void:
 		"HØGRE": steering = 1.0 if pressed else 0.0
 		"GASS": throttle = pressed
 		"BREMS": braking = pressed
+		"ZOOM":
+			if pressed:
+				camera_distance = 18.0 if camera_distance < 15.0 else 9.0
 		"KAMERA":
 			if pressed:
 				camera_mode = (camera_mode+1)%3
@@ -218,11 +239,18 @@ func control(label: String, pressed: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if wheel_touch == -1:
 		wheel_angle = lerpf(wheel_angle,0.0,minf(delta*8,1))
+	var distance := car.global_position.distance_to(destination)
+	var relative := destination-car.global_position
+	var bearing := wrapf(atan2(relative.x,relative.z)-car.rotation.y,-PI,PI)
+	map_label.text = "GPS: %d m | %s" % [roundi(distance), "høgre" if bearing>0.25 else ("venstre" if bearing < -0.25 else "rett fram")]
+	if mission_stage == 0 and distance < 8 and car.linear_velocity.length()<1:
+		mission_stage = 1
+	mission_label.text = "Oppdrag: køyr til testområdet og stopp" if mission_stage == 0 else "Oppdrag fullført"
 	var steer_input := wheel_angle/PI + steering + Input.get_axis("ui_left","ui_right")
 	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45*(1.0-0.5*clampf(car.linear_velocity.length()/20.0,0.0,1.0)), minf(delta*7,1))
 	car.engine_force = (-650.0 if reverse else 650.0) if throttle or Input.is_action_pressed("ui_up") else 0.0
 	car.brake = 35.0 if braking or Input.is_action_pressed("ui_down") else 0.0
-	var target := car.global_position + car.global_basis * Vector3(0,6,-12)
+	var target := car.global_position + car.global_basis * Vector3(0,6,-camera_distance)
 	if camera_mode == 1:
 		target = car.global_position + Vector3(0,25,-0.1)
 	elif camera_mode == 2:
