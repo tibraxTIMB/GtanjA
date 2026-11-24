@@ -1,0 +1,40 @@
+name: Hardanger terrain
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/hardanger-terrain.yml'
+permissions:
+  contents: read
+jobs:
+  terrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y gdal-bin
+      - run: pip install rasterio numpy pyproj
+      - name: Fetch coverage
+        run: |
+          python - <<'PY'
+          from pyproj import Transformer
+          import subprocess
+          e,n=Transformer.from_crs(4326,25832,always_xy=True).transform(6.18,60.3775)
+          url="WCS:https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+          info=subprocess.check_output(["gdalinfo",url],text=True)
+          print(info)
+          import re
+          layers=re.findall(r"SUBDATASET_\d+_NAME=(.*)",info)
+          if len(layers)!=1:
+              raise RuntimeError("Coverage must be selected explicitly from capabilities")
+          r=3510
+          subprocess.run(["gdal_translate","-projwin",str(e-r),str(n+r),str(e+r),str(n-r),"-tr","10","10",layers[0].strip(),"terrain-source.tif"],check=True)
+          PY
+      - run: python reborn-x/tools/import_terrain.py terrain-source.tif --license "See Geonorge metadata 05821c51-2f5b-411f-9098-924d13dbea9a; verify before redistribution" --source-url "https://wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25832"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hardanger-terrain
+          path: |
+            reborn-x/data/terrain.json
+            reborn-x/data/terrain.f32
+          if-no-files-found: error
