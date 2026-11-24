@@ -77,6 +77,11 @@ func _ready() -> void:
 			car.add_child(wheel)
 			wheel.position = Vector3(x,-0.3,z)
 			wheel.wheel_radius = 0.34
+			wheel.wheel_rest_length = 0.2
+			wheel.suspension_stiffness = 25.0
+			wheel.damping_compression = 0.9
+			wheel.damping_relaxation = 1.1
+			wheel.wheel_friction_slip = 2.5
 			wheel.use_as_steering = z > 0
 			wheel.use_as_traction = z < 0
 			var visual := MeshInstance3D.new()
@@ -123,6 +128,28 @@ func _ready() -> void:
 		axle.rotation_degrees.y = 90
 		axle.node_a = axle.get_path_to(trailer)
 		axle.node_b = axle.get_path_to(tire_body)
+	block(trailer, Vector3(0,0.4,-1.4), Vector3(1.65,0.65,0.08), Color.SILVER)
+	block(trailer, Vector3(0,0.4,1.4), Vector3(1.65,0.65,0.08), Color.SILVER)
+	for x in [-0.8,0.8]:
+		block(trailer, Vector3(x,0.77,0), Vector3(0.12,0.08,2.8), Color(0.78,0.8,0.82))
+		block(trailer, Vector3(x*1.35,0.05,0), Vector3(0.32,0.08,0.95), Color(0.35,0.38,0.4))
+		block(trailer, Vector3(x*0.8,0.05,-1.46), Vector3(0.28,0.13,0.06), Color(0.85,0.04,0.03))
+		var drawbar := MeshInstance3D.new()
+		var beam := BoxMesh.new()
+		beam.size = Vector3(0.09,0.09,1.5)
+		drawbar.mesh = beam
+		drawbar.material_override = material(Color.SILVER)
+		trailer.add_child(drawbar)
+		drawbar.position = Vector3(x*0.5,-0.05,2.0)
+		drawbar.rotation.y = -x*0.7
+	block(trailer, Vector3(0,-0.05,2.6), Vector3(0.2,0.16,0.3), Color(0.55,0.57,0.6))
+	var nameplate := Label3D.new()
+	nameplate.text = "TANJA"
+	nameplate.font_size = 48
+	nameplate.pixel_size = 0.006
+	trailer.add_child(nameplate)
+	nameplate.position = Vector3(0,0.45,-1.46)
+	nameplate.rotation_degrees.y = 180
 	var joint := PinJoint3D.new()
 	add_child(joint)
 	joint.position = car.position + Vector3(0,0,-2.2)
@@ -192,7 +219,7 @@ func _physics_process(delta: float) -> void:
 	if wheel_touch == -1:
 		wheel_angle = lerpf(wheel_angle,0.0,minf(delta*8,1))
 	var steer_input := wheel_angle/PI + steering + Input.get_axis("ui_left","ui_right")
-	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45, minf(delta*7,1))
+	car.steering = lerpf(car.steering, clampf(steer_input,-1,1)*0.45*(1.0-0.5*clampf(car.linear_velocity.length()/20.0,0.0,1.0)), minf(delta*7,1))
 	car.engine_force = (-650.0 if reverse else 650.0) if throttle or Input.is_action_pressed("ui_up") else 0.0
 	car.brake = 35.0 if braking or Input.is_action_pressed("ui_down") else 0.0
 	var target := car.global_position + car.global_basis * Vector3(0,6,-12)
