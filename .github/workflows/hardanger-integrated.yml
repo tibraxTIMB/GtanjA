@@ -116,3 +116,59 @@ jobs:
         with:
           name: gis-test-log
           path: runtime.log
+  android:
+    runs-on: ubuntu-latest
+    needs: preview
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardanger-vector-map
+          path: reborn-x/data
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: hardanger-terrain
+          path: reborn-x/data
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: sandvenhagen-detail
+          path: reborn-x/data
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Godot and export templates
+        run: |
+          base=https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable
+          curl -fL --retry 3 "$base/Godot_v4.4.1-stable_linux.x86_64.zip" -o godot.zip
+          unzip godot.zip
+          sudo install Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+          curl -fL --retry 3 "$base/Godot_v4.4.1-stable_export_templates.tpz" -o templates.zip
+          unzip -q templates.zip
+          mkdir -p ~/.local/share/godot/export_templates
+          mv templates ~/.local/share/godot/export_templates/4.4.1.stable
+          mkdir -p ~/.config/godot ~/.android build
+          test -f ~/.android/debug.keystore || keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME/.android/debug.keystore" > ~/.config/godot/editor_settings-4.4.tres
+      - name: Validate and export
+        run: |
+          set -o pipefail
+          godot --headless --path reborn-x --editor --import 2>&1 | tee import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|ERROR:' import.log; then exit 1; fi
+          godot --headless --path reborn-x --export-debug Android "$PWD/build/gtanja-debug.apk" 2>&1 | tee export.log
+          test -s build/gtanja-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GTanjA-Hardanger-Android
+          path: build/gtanja-debug.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-build-logs
+          path: '*.log'
