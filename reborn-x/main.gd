@@ -286,7 +286,7 @@ func wheel_input(event: InputEvent) -> void:
 		elif not event.pressed and event.index == wheel_touch:
 			wheel_touch = -1
 	elif event is InputEventScreenDrag and event.index == wheel_touch:
-		var bearing := (event.position - wheel_panel.size/2).angle()
+		var bearing: String = (event.position - wheel_panel.size/2).angle()
 		wheel_angle = clampf(wheel_angle + wrapf(bearing-wheel_last,-PI,PI),-PI,PI)
 		wheel_last = bearing
 
@@ -464,7 +464,7 @@ func load_geography() -> bool:
 			var d := q-p
 			if d.length() < 0.2:
 				continue
-			var basis := Basis.looking_at(d,Vector3.UP,true).scaled_local(Vector3(width,1,d.length()+0.2))
+			var basis := Basis.looking_at(d,Vector3.UP,true) * Basis.from_scale(Vector3(width,1,d.length()+0.2))
 			transforms.append(Transform3D(basis,(p+q)/2))
 			if not map_loaded and d.length()>15 and width>=7:
 				map_spawn = (p+q)/2 + Vector3(0,0.85,0)
