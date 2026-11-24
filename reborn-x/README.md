@@ -1,0 +1,2 @@
+# REBORN X — Godot 4 experimental prototype
+Open project.godot in Godot 4. Compatibility renderer; no paid services. This is an untested source prototype, not an Android APK. Terrain is fictional. VehicleBody3D and PinJoint3D are initial physics experiments; trailer wheel suspension, real GIS, analog steering, collision validation and Android export remain to be implemented. Existing web games remain separate.
