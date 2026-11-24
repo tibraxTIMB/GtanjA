@@ -2,6 +2,8 @@ extends Node3D
 const Engineering = preload("res://hitch_engineering.gd")
 var model = Engineering.new()
 var crank: Node3D
+var handle: Node3D
+var cable: MeshInstance3D
 var plug: Node3D
 var lid: Node3D
 var wheel: Node3D
@@ -61,6 +63,25 @@ func _ready() -> void:
 	part(self,Vector3(-0.3,0.45,-0.15),Vector3(0.1,0.1,0.06),dark)
 	lid = pivot(Vector3(-0.3,0.51,-0.11))
 	part(lid,Vector3(0,-0.045,0),Vector3(0.1,0.09,0.015),dark)
+	handle = pivot(Vector3(0,0.54,0.04))
+	part(handle,Vector3(0,0.025,0.09),Vector3(0.055,0.045,0.22),silver)
+	for i in range(13):
+		var angle := TAU*float(i)/13.0
+		var pin := MeshInstance3D.new()
+		var pin_shape := CylinderMesh.new()
+		pin_shape.top_radius = 0.002
+		pin_shape.bottom_radius = 0.002
+		pin_shape.height = 0.012
+		pin.mesh = pin_shape
+		plug.add_child(pin)
+		pin.rotation.x = PI/2
+		pin.position = Vector3(cos(angle)*0.025,sin(angle)*0.025,-0.065)
+		var brass := StandardMaterial3D.new()
+		brass.albedo_color = Color(0.75,0.58,0.22)
+		brass.metallic = 0.8
+		pin.material_override = brass
+	cable = MeshInstance3D.new()
+	add_child(cable)
 	var light := DirectionalLight3D.new()
 	add_child(light)
 	light.rotation_degrees = Vector3(-45,-30,0)
@@ -108,6 +129,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		refresh()
 
 func refresh() -> void:
+	handle.rotation.x = -0.8 if model.handle_open else 0.0
+	var wire := ImmediateMesh.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.2,0.2,0.2)
+	wire.surface_begin(Mesh.PRIMITIVE_LINE_STRIP,mat)
+	for i in range(25):
+		var t := float(i)/24.0
+		var endpoint := Vector3(0.05,0.43,-0.12) if model.wire_attached else Vector3(0.25,0.25,0.25)
+		var point := Vector3(0.1,0.45,0.5).lerp(endpoint,t)
+		point.y -= sin(t*PI)*0.15
+		wire.surface_add_vertex(point)
+	wire.surface_end()
+	cable.mesh = wire
 	wheel.position.y = 0.2+(model.height_mm-430.0)/1000.0
 	if model.wheel_stowed:
 		wheel.position.y = 0.5
