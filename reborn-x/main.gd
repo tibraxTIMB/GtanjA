@@ -2,6 +2,14 @@ extends Node3D
 
 var map_spawn := Vector3(0,0.85,-40)
 var map_loaded := false
+var terrain = null
+
+func ground_height(x:float,z:float) -> float:
+	if terrain != null:
+		var h: float = terrain.height_at(x,z)
+		if is_finite(h):
+			return h
+	return 0.0
 var car: VehicleBody3D
 var trailer: RigidBody3D
 var camera: Camera3D
@@ -211,6 +219,7 @@ func _ready() -> void:
 	camera.position = car.position + Vector3(0,6,-12)
 	if map_loaded:
 		destination = map_spawn + Vector3(0,0,25)
+		destination.y = ground_height(destination.x,destination.z)
 	else:
 		block(self,Vector3(80,0.05,100),Vector3(12,0.1,12),Color(0.8,0.65,0.15))
 		for i in range(3):
@@ -422,7 +431,15 @@ func load_geography() -> bool:
 	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not data is Dictionary or not data.has("roads") or data["roads"].is_empty():
 		return false
-	block(self, Vector3(0,-0.5,0), Vector3(6600,1,6600), Color(0.28,0.43,0.23), true)
+	var candidate = preload("res://terrain_grid.gd").new()
+	# Only combine datasets explicitly projected to the shared origin.
+	if data.get("crs","") == "EPSG:25832" and candidate.load_grid():
+		terrain = candidate
+		add_child(terrain)
+		terrain.build()
+	else:
+		candidate.free()
+		block(self, Vector3(0,-0.5,0), Vector3(6600,1,6600), Color(0.28,0.43,0.23), true)
 	var asphalt := material(Color(0.22,0.24,0.25))
 	var road_mesh := BoxMesh.new()
 	road_mesh.size = Vector3(1,0.04,1)
@@ -433,10 +450,12 @@ func load_geography() -> bool:
 		for i in range(points.size()-1):
 			var p := Vector3(points[i][0],0.025,points[i][1])
 			var q := Vector3(points[i+1][0],0.025,points[i+1][1])
+			p.y = ground_height(p.x,p.z)+0.06
+			q.y = ground_height(q.x,q.z)+0.06
 			var d := q-p
 			if d.length() < 0.2:
 				continue
-			var basis := Basis(Vector3.UP,atan2(d.x,d.z)).scaled_local(Vector3(width,1,d.length()+0.2))
+			var basis := Basis.looking_at(d,Vector3.UP,true).scaled_local(Vector3(width,1,d.length()+0.2))
 			transforms.append(Transform3D(basis,(p+q)/2))
 			if not map_loaded and d.length()>15 and width>=7:
 				map_spawn = (p+q)/2 + Vector3(0,0.85,0)
@@ -473,7 +492,7 @@ func load_geography() -> bool:
 		shape.polygon = local
 		shape.depth = 5
 		shape.rotation_degrees.x = 90
-		shape.position = Vector3(center.x,5,center.y)
+		shape.position = Vector3(center.x,ground_height(center.x,center.y)+5,center.y)
 		shape.material = material(Color(0.7,0.63,0.52))
 		add_child(shape)
 	map_loaded = true
@@ -613,6 +632,7 @@ func setup_sorting_bays() -> void:
 	# Fictional test layout; not a surveyed BIR facility.
 	for i in range(4):
 		var pos := destination + Vector3((i-1.5)*6.0,0,10)
+		pos.y = ground_height(pos.x,pos.z)
 		sorting_bays.append(pos-Vector3(0,0,4))
 		var color := Color(0.22,0.42,0.32)
 		block(self,pos+Vector3(0,0.15,0),Vector3(4,0.3,3),color,true)
