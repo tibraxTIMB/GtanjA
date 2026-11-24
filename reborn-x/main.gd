@@ -24,6 +24,7 @@ var tailgate_locked := true
 var tailgate_latches: Array[bool] = [true,true]
 var latch_meshes: Array[Node3D] = []
 var gate_drag := false
+var gate_touch := -1
 var gate_angle := 0.0
 var career_xp := 0
 var career_jobs := 0
@@ -467,6 +468,31 @@ func setup_audio() -> void:
 	motor_audio.play()
 
 func _input(event: InputEvent) -> void:
+	if not is_instance_valid(tailgate) or not is_instance_valid(camera):
+		return
+	if event is InputEventScreenTouch and event.pressed and trailer.linear_velocity.length()<0.2:
+		if event.position.y < get_viewport().get_visible_rect().size.y-110:
+			for i in range(latch_meshes.size()):
+				var point := latch_meshes[i].global_position
+				if not camera.is_position_behind(point) and camera.unproject_position(point).distance_to(event.position)<24:
+					control("V LÅS" if i == 0 else "H LÅS",true)
+					get_viewport().set_input_as_handled()
+					return
+			var gate_point := tailgate.to_global(Vector3(0,0.32,0))
+			if not camera.is_position_behind(gate_point) and camera.unproject_position(gate_point).distance_to(event.position)<48 and not tailgate_latches[0] and not tailgate_latches[1]:
+				gate_touch = event.index
+				gate_drag = true
+				get_viewport().set_input_as_handled()
+				return
+	if event is InputEventScreenDrag and gate_touch == event.index and gate_drag:
+		gate_angle = clampf(gate_angle + event.relative.y*0.008,0.0,PI/2)
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenTouch and not event.pressed and gate_touch == event.index:
+		gate_touch = -1
+		gate_drag = false
+		get_viewport().set_input_as_handled()
+		return
 	if gate_drag and event is InputEventScreenDrag and not tailgate_latches[0] and not tailgate_latches[1]:
 		gate_angle = clampf(gate_angle + event.relative.y*0.008,0.0,PI/2)
 	if event is InputEventScreenTouch and not event.pressed:
