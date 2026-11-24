@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/hardanger-preview-fast.yml'
+      - 'reborn-x/main.gd'
 permissions:
   contents: read
   actions: read
